@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { UserCircle, Info, Briefcase, FolderKanban, Share2, X } from "lucide-react";
 import { ComprehensiveForm } from "./comprehensive-form";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 interface DraggableItemProps {
   id: string;
@@ -114,7 +115,12 @@ export default function Builder() {
           case "Profile":
             content = (
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-gray-300 rounded-full"></div>
+                <Image        
+                      src={formData.profile?.imageUrl || "/Hovah.jpeg"}
+                      alt="Profile" 
+                      height={64} 
+                      width={64} 
+                      className="rounded-full" />                
                 <div>
                   <h4 className="text-xl font-semibold">{formData.profile?.name || "John Doe"}</h4>
                   <p className="text-gray-600">{formData.profile?.location || "Location"}</p>

@@ -1,5 +1,6 @@
 import Image from "next/image";
-import { MapPin } from "lucide-react";
+import { MapPin, Building2  } from 'lucide-react'
+import { Switch } from "@/components/ui/switch"
 
 interface ProfileProps {
   name: string;
@@ -13,22 +14,34 @@ interface ProfileProps {
 
 export function Profile({ data }: { data: ProfileProps }) {
   return (
-    <div className="flex items-center space-x-4">
-      <Image
+    <div className="flex flex-col items-center text-center space-y-4">
+    <div className="relative w-32 h-32 rounded-full overflow-hidden">
+    <Image
         src={data.imageUrl || "/placeholder.svg"}
         alt="Profile"
         width={60}
         height={60}
         className="rounded-full object-cover"
       />
-      <div>
-        <h4 className="font-semibold">{data.name || "Name not provided"}</h4>
-        <p className="text-sm text-muted-foreground">{data.title || "Title not provided"}</p>
-        <p className="text-sm text-muted-foreground flex items-center">
-          <MapPin className="w-4 h-4 mr-1" />
-          {data.location || "Location not provided"}
-        </p>
+    </div>
+    <div>
+      <h1 className="text-3xl font-bold">{data.name || "Name not provided"}</h1>
+      <Switch className="mt-2" />
+    </div>
+    <div className="flex items-center gap-4 text-gray-600">
+      <div className="flex items-center gap-2">
+        <MapPin className="w-4 h-4" />
+        <span>{data.location || "Location not provided"}</span>
+      </div>
+      <span>|</span>
+      <div className="flex items-center gap-2">
+        <Building2 className="w-4 h-4" />
+        <span>{data.title || "Title not provided"}</span>
       </div>
     </div>
+    <h2 className="text-xl">Student, Mentor, Developer</h2>
+  </div>
+
+  
   );
 }
