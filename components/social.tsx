@@ -1,3 +1,5 @@
+// components/social.tsx
+
 interface SocialProps {
   platform: string;
   url: string;

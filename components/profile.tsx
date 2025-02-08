@@ -1,3 +1,5 @@
+// components/profile.tsx
+
 import Image from "next/image";
 import { MapPin, Building2  } from 'lucide-react'
 import { Switch } from "@/components/ui/switch"
@@ -6,7 +8,7 @@ interface ProfileProps {
   name: string;
   title: string;
   location: string;
-  imageUrl: string;
+  image_url: string;
   email?: string; // Optional, in case email is used elsewhere
   phone?: string; // Optional
   website?: string; // Optional
@@ -17,7 +19,7 @@ export function Profile({ data }: { data: ProfileProps }) {
     <div className="flex flex-col items-center text-center space-y-4">
     <div className="relative w-32 h-32 rounded-full overflow-hidden">
     <Image
-        src={data.imageUrl || "/placeholder.svg"}
+        src={data.image_url || "/placeholder.svg"}
         alt="Profile"
         width={60}
         height={60}

@@ -1,19 +1,39 @@
-// app/components/comprehensive-form.tsx
+// components/comprehensive-form.tsx
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { PlusCircle, X } from 'lucide-react';
+import { useRouter } from "next/navigation";
 
-interface FormData {
+// Child sections
+import ProfileSection from "./sections/ProfileSection";
+import AboutMeSection from "./sections/AboutMeSection";
+import ProjectsSection from "./sections/ProjectsSection";
+import SocialLinksSection from "./sections/SocialLinksSection";
+
+interface Project {
+  id: string;
+  title: string;
+  description: string;
+  status: "on-going" | "completed" | "on-hold";
+  // Because your DB shows categories is text, we'll store it as ONE string
+  categories?: string;
+}
+
+interface SocialLink {
+  id: string;
+  platform: string;
+  url: string;
+}
+
+interface AppFormData {
   profile: {
     name: string;
     title: string;
     location: string;
-    imageUrl: string;
+    image_url: string;
     email: string;
     phone: string;
     website: string;
@@ -23,384 +43,319 @@ interface FormData {
     title: string;
     description: string;
   };
-  projects: Array<{
-    title: string;
-    description: string;
-    status: 'on-going' | 'completed' | 'on-hold';
-    tags: string[];
-    technologies: string[];
-  }>;
-  social: Array<{
-    platform: string;
-    url: string;
-  }>;
+  projects: Project[];
+  social: SocialLink[];
 }
 
 interface ComprehensiveFormProps {
-  initialData?: FormData | null;
-  onSave: (data: FormData) => void;
-  onViewProfile: () => void; // Function to switch to builder.tsx
-
+  initialData: AppFormData;
+  onSave: (data: AppFormData) => void;
 }
 
-const defaultFormData: FormData = {
-  profile: {
-    name: '',
-    title: '',
-    location: '',
-    imageUrl: '',
-    email: '',
-    phone: '',
-    website: '',
-  },
-  aboutMe: '',
-  jobScope: {
-    title: '',
-    description: '',
-  },
-  projects: [{
-    title: '',
-    description: '',
-    status: 'on-going',
-    tags: [],
-    technologies: [],
-  }],
-  social: [{
-    platform: '',
-    url: '',
-  }],
+export function ComprehensiveForm({
+  initialData,
+  onSave,
+}: ComprehensiveFormProps) {
+  const [formData, setFormData] = useState<AppFormData>(initialData);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [profileUpdated, setProfileUpdated] = useState(false);
+  const router = useRouter();
+
+  // Load profileId from localStorage
+  useEffect(() => {
+    const storedProfileId = localStorage.getItem("profileId");
+    if (storedProfileId) {
+      setProfileId(storedProfileId);
+      fetchProfileData(storedProfileId);
+    } else {
+      router.push("/login");
+    }
+  }, [router]);
+
+  // Fetch existing data from Supabase
+  async function fetchProfileData(id: string) {
+    try {
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select(
+          `
+          name,
+          title,
+          location,
+          image_url,
+          email,
+          phone,
+          website,
+          about_me(content),
+          job_scope(title, description),
+          projects(id, title, description, status, categories),
+          social_links(id, platform, url)
+        `
+        )
+        .eq("id", id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching profile:", error);
+        return;
+      }
+
+      const updatedData: AppFormData = {
+        profile: {
+          name: profile?.name || "",
+          title: profile?.title || "",
+          location: profile?.location || "",
+          image_url: profile?.image_url || "",
+          email: profile?.email || "",
+          phone: profile?.phone || "",
+          website: profile?.website || "",
+        },
+        aboutMe: profile?.about_me?.content || "",
+        jobScope: {
+          title: profile?.job_scope?.title || "",
+          description: profile?.job_scope?.description || "",
+        },
+        projects: profile?.projects || [],
+        social: profile?.social_links || [],
+      };
+      setFormData(updatedData);
+    } catch (error) {
+      console.error("Error fetching profile data:", error);
+    }
+  }
+
+  // Handle form submit
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+  
+    try {
+      await saveProfileData(profileId, formData);
+      onSave(formData); // Parent's onSave will show one alert and do the redirect.
+    } catch (error) {
+      // error already alerted above
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+// Upsert logic
+ // Inside components/comprehensive-form.tsx
+
+ async function saveProfileData(id: string | null, data: AppFormData) {
+  try {
+    if (!id) {
+      throw new Error("Profile ID is missing.");
+    }
+
+    // 1) Upsert the main profile
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id,
+          name: data.profile.name.trim(),
+          title: data.profile.title,
+          location: data.profile.location,
+          image_url: data.profile.image_url,
+          email: data.profile.email,
+          phone: data.profile.phone,
+          website: data.profile.website,
+        },
+        { onConflict: ["id"] }
+      );
+    if (profileError) {
+      throw new Error("Error updating profile data: " + profileError.message);
+    }
+
+    // 2) Upsert About Me (with conflict resolution)
+    const { error: aboutMeError } = await supabase
+      .from("about_me")
+      .upsert(
+        {
+          profile_id: id,
+          content: data.aboutMe,
+        },
+        { onConflict: "profile_id" }
+      );
+    if (aboutMeError) {
+      throw new Error("Error saving About Me: " + aboutMeError.message);
+    }
+
+    // 3) Upsert Job Scope (with conflict resolution)
+    const { error: jobScopeError } = await supabase
+      .from("job_scope")
+      .upsert(
+        {
+          profile_id: id,
+          title: data.jobScope.title,
+          description: data.jobScope.description,
+        },
+        { onConflict: "profile_id" }
+      );
+    if (jobScopeError) {
+      throw new Error("Error saving Job Scope: " + jobScopeError.message);
+    }
+
+    // 4) Upsert each project (with categories as an array)
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    for (const project of data.projects) {
+      const projectId =
+        project.id && uuidRegex.test(project.id)
+          ? project.id
+          : crypto.randomUUID();
+
+      let categoriesArray: string[] = [];
+      if (typeof project.categories === "string") {
+        categoriesArray = project.categories
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item !== "");
+      } else if (Array.isArray(project.categories)) {
+        categoriesArray = project.categories;
+      }
+
+      const { error: projectError } = await supabase
+        .from("projects")
+        .upsert({
+          id: projectId,
+          profile_id: id,
+          title: project.title,
+          description: project.description,
+          status: project.status,
+          categories: categoriesArray,
+        });
+      if (projectError) {
+        throw new Error("Error saving project: " + projectError.message);
+      }
+    }
+
+    // 5) Delete projects that exist in the database but are not in the local state.
+    // Get an array of local project IDs (only those that exist, as strings).
+    const localProjectIds = data.projects
+      .map((p) => p.id)
+      .filter((id): id is string => Boolean(id));
+    if (localProjectIds.length > 0) {
+      // To be safe, quote the IDs so they match UUID format in SQL.
+      const quotedProjectIds = localProjectIds.map((id) => `"${id}"`).join(",");
+      const { error: deleteProjectError } = await supabase
+        .from("projects")
+        .delete()
+        .match({ profile_id: id })
+        .not("id", "in", `(${quotedProjectIds})`);
+      if (deleteProjectError) {
+        throw new Error(
+          "Error deleting removed projects: " + deleteProjectError.message
+        );
+      }
+    } else {
+      // If no projects remain in the local state, delete all projects for this profile.
+      const { error: deleteAllProjectsError } = await supabase
+        .from("projects")
+        .delete()
+        .match({ profile_id: id });
+      if (deleteAllProjectsError) {
+        throw new Error(
+          "Error deleting all projects: " + deleteAllProjectsError.message
+        );
+      }
+    }
+
+    // 6) Upsert each social link (ensuring valid UUIDs)
+    for (const link of data.social) {
+      // If the URL is empty, skip this link (or you can choose to alert the user)
+      if (!link.url || !link.url.trim()) {
+        continue;
+      }
+      
+      const linkId =
+        link.id && uuidRegex.test(link.id)
+          ? link.id
+          : crypto.randomUUID();
+    
+      const { error: socialError } = await supabase
+        .from("social_links")
+        .upsert({
+          id: linkId,
+          profile_id: id,
+          platform: link.platform,
+          url: link.url,
+        });
+      if (socialError) {
+        throw new Error("Error saving social link: " + socialError.message);
+      }
+    }
+
+    // 7) Delete social links that exist in the database but are not in the local state.
+    const localSocialIds = data.social
+      .map((link) => link.id)
+      .filter((id): id is string => Boolean(id));
+    if (localSocialIds.length > 0) {
+      const quotedSocialIds = localSocialIds.map((id) => `"${id}"`).join(",");
+      const { error: deleteSocialError } = await supabase
+        .from("social_links")
+        .delete()
+        .match({ profile_id: id })
+        .not("id", "in", `(${quotedSocialIds})`);
+      if (deleteSocialError) {
+        throw new Error(
+          "Error deleting removed social links: " + deleteSocialError.message
+        );
+      }
+    } else {
+      // If no social links remain in the local state, delete all social links for this profile.
+      const { error: deleteAllSocialError } = await supabase
+        .from("social_links")
+        .delete()
+        .match({ profile_id: id });
+      if (deleteAllSocialError) {
+        throw new Error(
+          "Error deleting all social links: " + deleteAllSocialError.message
+        );
+      }
+    }
+  } catch (err: any) {
+    console.error("Error saving profile data:", err);
+    alert("Failed to save data. Please try again.");
+    throw err;
+  }
+}
+
+// Update the handler to go to the builder:
+const handleBuilderButton = () => {
+  localStorage.setItem("formData", JSON.stringify(formData));
+  // Also save an empty components array so the builder page does not redirect:
+  localStorage.setItem("components", JSON.stringify([]));
+  router.push("/user/builder");
 };
 
-export function ComprehensiveForm({ initialData = defaultFormData, onSave, onViewProfile }: ComprehensiveFormProps) {
-  const [formData, setFormData] = useState<FormData>(initialData || defaultFormData);
-
-  const handleChange = (section: keyof FormData, field: string, value: string | File | null) => {
-    setFormData(prev => ({
-      ...prev,
-      [section]: {
-        ...(typeof prev[section] === 'object' ? prev[section] : {}),
-        [field]: value
-      }
-    }));
-  };
-
-  const handleProjectChange = (index: number, field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      projects: prev.projects.map((project, i) =>
-        i === index ? { ...project, [field]: value } : project
-      )
-    }));
-  };
-
-  const handleSocialChange = (index: number, field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      social: prev.social.map((link, i) =>
-        i === index ? { ...link, [field]: value } : link
-      )
-    }));
-  };
-
-  const addProject = () => {
-    setFormData(prev => ({
-      ...prev,
-      projects: [
-        ...prev.projects,
-        { title: '', description: '', status: 'on-going', tags: [], technologies: [] }
-      ]
-    }));
-  };
-
-  const removeProject = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      projects: prev.projects.filter((_, i) => i !== index)
-    }));
-  };
-
-  const addSocialLink = () => {
-    setFormData(prev => ({
-      ...prev,
-      social: [...prev.social, { platform: '', url: '' }]
-    }));
-  };
-
-  const removeSocialLink = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      social: prev.social.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-  };
+  
+  if (!profileId) {
+    return <p>Loading...</p>;
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8 p-4">
+    <form onSubmit={handleSubmit} className="space-y-8 p-4"> 
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Edit Your Profile Information</h1>
-        <Button variant="outline" onClick={onViewProfile}>
-          View Profile
+        <Button type="button" variant="outline" onClick={handleBuilderButton}>
+          Go to Builder
         </Button>
       </div>
-    
-     {/* Profile Information Section */}
-     <Card className="shadow-md border-none">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-gray-800">Profile Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="name" className="text-sm">Name</Label>
-            <Input
-              id="name"
-              value={formData.profile.name}
-              onChange={(e) => handleChange('profile', 'name', e.target.value)}
-              className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <Label htmlFor="title" className="text-sm">Title</Label>
-            <Input
-              id="title"
-              value={formData.profile.title}
-              onChange={(e) => handleChange('profile', 'title', e.target.value)}
-              className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <Label htmlFor="location" className="text-sm">Location</Label>
-            <Input
-              id="location"
-              value={formData.profile.location}
-              onChange={(e) => handleChange('profile', 'location', e.target.value)}
-              className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <Label htmlFor="imageUpload" className="text-sm">Profile Image</Label>
-            <Input
-              id="imageUpload"
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    handleChange('profile', 'imageUrl', reader.result as string);
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
-              className="p-2 mt-2 rounded-md"
-            />
-            {formData.profile.imageUrl && (
-              <img
-                src={formData.profile.imageUrl}
-                alt="Profile"
-                className="mt-4 w-32 h-32 object-cover rounded-full border-2 border-gray-200"
-              />
-            )}
-          </div>
-          <div>
-            <Label htmlFor="email" className="text-sm">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.profile.email}
-              onChange={(e) => handleChange('profile', 'email', e.target.value)}
-              className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <Label htmlFor="phone" className="text-sm">Phone</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={formData.profile.phone}
-              onChange={(e) => handleChange('profile', 'phone', e.target.value)}
-              className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <Label htmlFor="website" className="text-sm">Website</Label>
-            <Input
-              id="website"
-              type="url"
-              value={formData.profile.website}
-              onChange={(e) => handleChange('profile', 'website', e.target.value)}
-              className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </CardContent>
-      </Card>
 
+      <ProfileSection formData={formData} setFormData={setFormData} />
+      <AboutMeSection formData={formData} setFormData={setFormData} />
+      <ProjectsSection formData={formData} setFormData={setFormData} />
+      <SocialLinksSection formData={formData} setFormData={setFormData} />
 
- {/* About Me Section */}
- <Card className="shadow-md border-none">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-gray-800">About Me</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={formData.aboutMe}
-            onChange={(e) => setFormData(prev => ({ ...prev, aboutMe: e.target.value }))}
-            rows={5}
-            className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </CardContent>
-      </Card>
-
-     
- 
-      {/* Projects Section */}
-      <Card className="shadow-md border-none">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-gray-800">Projects</CardTitle>
-          <p className="text-sm text-gray-500">Add your project details.</p>
-        </CardHeader>
-        <CardContent>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2">Title</th>
-                <th className="text-left px-4 py-2">Description</th>
-                <th className="text-left px-4 py-2">Status</th>
-                <th className="text-left px-4 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {formData.projects.map((project, index) => (
-                <tr key={index} className="border-b">
-                  <td className="px-4 py-2">
-                    <Input
-                      placeholder="Project Title"
-                      value={project.title}
-                      onChange={(e) =>
-                        handleProjectChange(index, "title", e.target.value)
-                      }
-                      className="p-2 border rounded"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <Textarea
-                      placeholder="Project Description"
-                      value={project.description}
-                      onChange={(e) =>
-                        handleProjectChange(index, "description", e.target.value)
-                      }
-                      className="p-2 border rounded resize-none"
-                      rows={2}
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <Input
-                      placeholder="Project Title"
-                      value={project.tags}
-                      onChange={(e) =>
-                        handleProjectChange(index, "tags", e.target.value)
-                      }
-                      className="p-2 border rounded"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <Input
-                      placeholder="Project Title"
-                      value={project.technologies}
-                      onChange={(e) =>
-                        handleProjectChange(index, "technologies", e.target.value)
-                      }
-                      className="p-2 border rounded"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <select
-                      value={project.status}
-                      onChange={(e) =>
-                        handleProjectChange(index, "status", e.target.value)
-                      }
-                      className="p-2 border rounded w-full"
-                    >
-                      <option value="on-going">On-going</option>
-                      <option value="completed">Completed</option>
-                      <option value="on-hold">On Hold</option>
-                    </select>
-                  </td>
-                  
-                  <td className="px-4 py-2 flex space-x-2 items-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeProject(index)}
-                    >
-                      <X className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Button 
-              type="button" 
-              onClick={addProject} 
-              className="w-full mt-4 flex items-center justify-center"
-            >
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Project
-            </Button>
-
-        </CardContent>
-      </Card>
-
-      {/* Social Links Section */}
-      <Card className="shadow-md border-none">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-gray-800">Social Links</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {formData.social.map((link, index) => (
-            <div key={index} className="flex items-center space-x-2">
-              <select
-                className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={link.platform}
-                onChange={(e) => handleSocialChange(index, 'platform', e.target.value)}
-              >
-                <option value="">Select Platform</option>
-                <option value="facebook">Facebook</option>
-                <option value="twitter">Twitter</option>
-                <option value="linkedin">LinkedIn</option>
-                <option value="instagram">Instagram</option>
-                <option value="website">Website</option>
-              </select>
-              <Input
-                placeholder="Enter URL"
-                value={link.url}
-                onChange={(e) => handleSocialChange(index, 'url', e.target.value)}
-                className="p-3 mt-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => removeSocialLink(index)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-          <Button type="button" onClick={addSocialLink} className="w-full mt-4">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Social Link
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Submit Button */}
-      <Button type="submit" className="w-full mt-6 bg-blue-600 text-white rounded-lg py-3 text-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        Save All Information
+      <Button
+        type="submit"
+        className="w-full mt-6 bg-blue-600 text-white py-3 text-lg hover:bg-blue-700"
+        disabled={isLoading}
+      >
+        {isLoading ? "Saving..." : "Save All Information"}
       </Button>
     </form>
   );

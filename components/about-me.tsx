@@ -1,3 +1,5 @@
+//components/about-me.tsx
+
 interface AboutMeProps {
   data: string;
 }

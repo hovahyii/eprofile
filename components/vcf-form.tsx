@@ -1,4 +1,4 @@
-// app/components/vcf-form.tsx
+// components/vcf-form.tsx
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"

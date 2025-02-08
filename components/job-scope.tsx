@@ -1,3 +1,5 @@
+// components/job-scope.tsx
+
 interface JobScopeProps {
   title: string;
   description: string;

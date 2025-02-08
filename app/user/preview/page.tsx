@@ -1,13 +1,7 @@
-// app/preview/page.tsx
+"use client"
 
-"use client";
-
-import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { QrCode } from "lucide-react";
-
 import { Profile } from "@/components/profile";
 import { AboutMe } from "@/components/about-me";
 import { JobScope } from "@/components/job-scope";
@@ -16,35 +10,22 @@ import { Social } from "@/components/social";
 import ContactVCFComponent from "@/components/contact-vcf";
 
 export default function PreviewPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [formData, setFormData] = useState<any>(null);
   const [components, setComponents] = useState<any[]>([]);
 
-  // Fetch data from query parameters
   useEffect(() => {
-    const formDataParam = searchParams.get("formData");
-    const componentsParam = searchParams.get("components");
+    // Get data from localStorage
+    const savedFormData = localStorage.getItem("formData");
+    const savedComponents = localStorage.getItem("components");
 
-    console.log("formDataParam:", formDataParam);
-    console.log("componentsParam:", componentsParam);
-
-    if (formDataParam) {
-      try {
-        setFormData(JSON.parse(formDataParam));
-      } catch (error) {
-        console.error("Failed to parse formData:", error);
-      }
+    if (savedFormData) {
+      setFormData(JSON.parse(savedFormData));
     }
 
-    if (componentsParam) {
-      try {
-        setComponents(JSON.parse(componentsParam));
-      } catch (error) {
-        console.error("Failed to parse components:", error);
-      }
+    if (savedComponents) {
+      setComponents(JSON.parse(savedComponents));
     }
-  }, [searchParams]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -62,7 +43,6 @@ export default function PreviewPage() {
           />
           {/* QR Code Button */}
           <Button variant="outline" className="flex items-center gap-2">
-            <QrCode className="w-4 h-4" />
             QR Code
           </Button>
         </div>
@@ -101,18 +81,7 @@ export default function PreviewPage() {
                 return (
                   <section key={component.id} className="space-y-4">
                     <h2 className="text-2xl font-bold">Projects</h2>
-                    <Tabs defaultValue="all">
-                      <TabsList>
-                        <TabsTrigger value="all">All</TabsTrigger>
-                        <TabsTrigger value="web">Web</TabsTrigger>
-                        <TabsTrigger value="engineering">Engineering</TabsTrigger>
-                        <TabsTrigger value="iot">IoT</TabsTrigger>
-                        <TabsTrigger value="3d">3D Modeling</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="all" className="mt-4">
-                        <Projects data={formData?.projects || []} />
-                      </TabsContent>
-                    </Tabs>
+                    <Projects data={formData?.projects || []} />
                   </section>
                 );
 

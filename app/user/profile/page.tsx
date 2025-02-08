@@ -1,13 +1,37 @@
 // app/user/profile/page.tsx
 
 'use client'
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ChevronRight, Eye, LogOut, PenSquare } from 'lucide-react'
 import Link from "next/link"
+import { supabase } from "@/lib/supabaseClient";
+import { Input } from "@/components/ui/input";
 
 export default function ProfileDashboard() {
+  const [activationCode, setActivationCode] = useState("");
+  const activateCard = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("activation_codes")
+        .select("profile_id")
+        .eq("code", activationCode)
+        .eq("is_active", true)
+        .single();
+
+      if (error || !data) throw new Error("Invalid activation code");
+
+      alert("Card activated successfully!");
+    } catch (error) {
+      if (error instanceof Error) {
+        alert(error.message || "Failed to activate the card");
+      } else {
+        alert("Failed to activate the card");
+      }
+    }
+  };
   return (
     <div className="min-h-screen p-6">
       <div className="max-w-2xl mx-auto">
@@ -30,15 +54,27 @@ export default function ProfileDashboard() {
           <p className="text-muted-foreground mb-4">
             Start sharing your profile by activating your Tapnex Card
           </p>
-          <Button size="lg" className="bg-[#14171F] text-white hover:bg-[#14171F]/90">
-            Activate Card
-          </Button>
+          <div className="space-y-4">
+            <Input
+              placeholder="Enter Activation Code"
+              value={activationCode}
+              onChange={(e) => setActivationCode(e.target.value)}
+              className="h-12 rounded-md border-gray-200 px-4"
+            />
+            <Button
+              size="lg"
+              className="bg-[#14171F] text-white hover:bg-[#14171F]/90"
+              onClick={activateCard}
+            >
+              Activate Card
+            </Button>
+          </div>
         </section>
 
         {/* Menu Items */}
         <div className="space-y-4">
           <Card className="p-4 hover:bg-accent cursor-pointer transition-colors">
-            <Link href="/edit-profile" className="flex items-center justify-between">
+            <Link href="/user/edit-profile" className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <PenSquare className="w-5 h-5 text-muted-foreground" />
                 <div>
